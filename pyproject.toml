@@ -1,0 +1,10 @@
+[project]
+name = "commandsense"
+version = "0.1.0"
+description = "Lightweight usage-informed command selector"
+dependencies = [
+    "prompt_toolkit"
+]
+
+[project.scripts]
+cmdsense = "commandsense.cli:main"
