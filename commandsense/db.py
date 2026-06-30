@@ -6,16 +6,20 @@ the commands the user types in normal terminal usage.
 """
 
 from pathlib import Path
+import sqlite3
 
 
-class SQLDatabase:
+class SQLiteDatabase:
     """
-    SQLDatabase
+    SQLiteDatabase
     This class is in charge of handing sqlite operations.
     """
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self.connection = sqlite3.connect(db_path)
+        self.cursor = self.connection.cursor()
+
 
     def load_commands_v1(self) -> list[str]:
         """temp function, loading commands from file. will later switch to an sqlite model.

@@ -15,7 +15,8 @@ from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 
 # first-party
-from commandsense.db import SQLDatabase
+from commandsense.commands import add
+from commandsense.db import SQLiteDatabase
 
 
 def main():
@@ -24,34 +25,29 @@ def main():
     If command `cmdsense add ...` is called, branches to
     that logic, else it acts as program was ran normally.
     """
+    app_data_path = PlatformDirs("commandsense")
+    sqlite3db = SQLiteDatabase(app_data_path.user_data_path)
     if len(argv) > 1 and argv[1] == "add":
-        command = " ".join(argv[2:]).strip()
-        if not command or command.startswith("cmdsense"):
-            return
-        save_command(command)
+        add.register_command(argv[2:], sqlite3db)
     else:
         if len(argv) > 1:
             print("(Commandsense): Unidentified command.")
         else:
-            cmdsense()
+            cmdsense(sqlite3db)
 
 
-def cmdsense() -> None:
+def cmdsense(db: SQLiteDatabase) -> None:
     """
     Main body of program. Is called if the 'add' argument isn't added to program.
 
     Args:
-        _: None
+        db (SQLiteDatabase): SQLite3 Database managing command history
 
     Returns:
         _: None
     """
 
-    app_data_path = PlatformDirs("commandsense")
-
-    db_init = SQLDatabase(app_data_path.user_data_path)
-
-    commands = list(set(db_init.load_commands_v1()))
+    commands = list(set(db.load_commands_v1()))
 
     trace_mode = True
 
@@ -82,21 +78,6 @@ def cmdsense() -> None:
 
     except Exception as e:
         print(f"Unexpected runtime error: {e}")
-
-
-def save_command(command: str) -> None:
-    """
-    Appends to datastore the command used so that the tool can
-    track usage rate of commands and suggest accordingly.
-
-    Args:
-        command(str): The command entered in the terminal by the user
-
-    Returns:
-        _: None
-    """
-    with open("hold_cmds", "a", encoding="utf-8") as w:
-        w.write(f"{command}\n")
 
 
 def is_unknown_command(ret_code: int, stderr: str) -> bool:
