@@ -1,24 +1,40 @@
-# entry point
+"""
+cli.py
+This file is the main driver of the cmdsense application.
+"""
+
+# std library
+import subprocess
+from sys import argv
+from pathlib import Path
+from traceback import format_exc
+from platformdirs import PlatformDirs
+
+# third-party
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
-import subprocess
-import traceback
-import sys
+
+# first-party
+from commandsense.db import SQLDatabase
 
 
 def main():
-    args = sys.argv
-    if len(args) > 1 and args[1] == "add":
-        command = " ".join(args[2:]).strip()
+    """
+    Main function handles all entries into program.
+    If command `cmdsense add ...` is called, branches to
+    that logic, else it acts as program was ran normally.
+    """
+    if len(argv) > 1 and argv[1] == "add":
+        command = " ".join(argv[2:]).strip()
         if not command or command.startswith("cmdsense"):
             return
         save_command(command)
     else:
-        if len(args) > 1:
+        if len(argv) > 1:
             print("(Commandsense): Unidentified command.")
         else:
             cmdsense()
-            
+
 
 def cmdsense() -> None:
     """
@@ -31,7 +47,11 @@ def cmdsense() -> None:
         _: None
     """
 
-    commands = list(set(load_commands_v1()))
+    app_data_path = PlatformDirs("commandsense")
+
+    db_init = SQLDatabase(app_data_path.user_data_path)
+
+    commands = list(set(db_init.load_commands_v1()))
 
     trace_mode = True
 
@@ -40,10 +60,12 @@ def cmdsense() -> None:
     text = prompt(message="> ", completer=completer, complete_while_typing=True)
 
     # ! 127 = command not found
-    # ! fun note - using -e on the pipx install means editable, so i dont have to reinstall after i make a code change
-    # * eventually we will have to modify the storage mechanism of commands to rank values based on usage. keep this in mind
+    # ! fun note - using -e on the pipx install means editable,
+    # ! so i dont have to reinstall after i make a code change
+    # * eventually we will have to modify the storage mechanism of commands to rank
+    # * values based on usage. keep this in mind
     try:
-        result = subprocess.run(text, shell=True, check=True, stderr=subprocess.PIPE, text=True)
+        subprocess.run(text, shell=True, check=True, stderr=subprocess.PIPE, text=True)
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").lower()
         if is_unknown_command(e.returncode, stderr):
@@ -52,7 +74,7 @@ def cmdsense() -> None:
             print(f"Command failed: {text} (exit {e.returncode})")
         if trace_mode:
             print("\nTraceback:")
-            print(traceback.format_exc())
+            print(format_exc())
 
             if e.stderr:
                 print("\n--- stderr ---")
@@ -61,33 +83,21 @@ def cmdsense() -> None:
     except Exception as e:
         print(f"Unexpected runtime error: {e}")
 
-def save_command(command:str) -> None:
+
+def save_command(command: str) -> None:
     """
     Appends to datastore the command used so that the tool can
     track usage rate of commands and suggest accordingly.
 
     Args:
         command(str): The command entered in the terminal by the user
-    
+
     Returns:
         _: None
     """
-    with open("hold_cmds", 'a') as w:
+    with open("hold_cmds", "a", encoding="utf-8") as w:
         w.write(f"{command}\n")
 
-def load_commands_v1() -> list[str]:
-    ''' temp function, loading commands from file. will later switch to an sqlite model.
-        when i get to that point, look into this library for storing location:
-        platformdirs: https://pypi.org/project/platformdirs/
-        also note that at that point i wont need a load commands function, since i will direct
-        hook into sqlite. maybe just a helper function for grabbing requested stuff. will need a
-        function for computing frequencies too '''
-    cmds = []
-    with open("hold_cmds", 'r') as r:
-        for line in r:
-            cmds.append(line.strip())
-    return cmds
-    
 
 def is_unknown_command(ret_code: int, stderr: str) -> bool:
     """
@@ -97,11 +107,12 @@ def is_unknown_command(ret_code: int, stderr: str) -> bool:
     Args:
         ret_code (int): exception return code
         stderr (str): stderr text
-    
+
     Returns:
         _: True if unknown, false otherwise
     """
     return ret_code == 127 or "not found" in stderr or "not recognized" in stderr
+
 
 # Note:
 # when ready for full release, make sure i do something like:
