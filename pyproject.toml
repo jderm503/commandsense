@@ -1,8 +1,12 @@
-[project]
+[tool.poetry]
 name = "commandsense"
 version = "0.1.0"
 description = "Lightweight usage-informed command selector"
-dependencies = ["prompt_toolkit", "platformdirs"]
 
-[project.scripts]
+[tool.poetry.dependencies]
+python = "^3.12"
+prompt_toolkit = "^3.0.52"
+platformdirs = "^4.10.0"
+
+[tool.poetry.scripts]
 cmdsense = "commandsense.cli:main"
