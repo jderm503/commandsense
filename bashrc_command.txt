@@ -1,0 +1,14 @@
+to add to bashrc when using this feature:
+function __cmdsense_hook() {
+    cmdsense add "$(history 1 | sed 's/^ *[0-9]* *//')"
+}
+
+if [[ "$PROMPT_COMMAND" != *"__cmdsense_hook"* ]]; then
+    if [[ -n "$PROMPT_COMMAND" ]]; then
+        PROMPT_COMMAND="__cmdsense_hook;$PROMPT_COMMAND"
+    else
+        PROMPT_COMMAND="__cmdsense_hook"
+    fi
+fi
+
+this file will not be around forever, just dropping here so it stays available when i swap pcs
