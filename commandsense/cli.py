@@ -26,30 +26,45 @@ def main():
     that logic, else it acts as program was ran normally.
     """
     app_data_path = PlatformDirs("commandsense")
-    sqlite3db = SQLiteDatabase(app_data_path.user_data_path)
-    if len(argv) > 1 and argv[1] == "add":
-        add.register_command(argv[2:], sqlite3db)
-    else:
-        if len(argv) > 1:
-            print("(Commandsense): Unidentified command.")
+    data_dir = app_data_path.user_data_path
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    db_file = data_dir / "commandsense.db"
+
+    user_conf_dir = app_data_path.user_config_path
+    user_conf_dir.mkdir(parents=True, exist_ok=True)
+    user_conf_file = user_conf_dir / "commandsense.conf"
+    if not user_conf_file.exists():
+        with open(user_conf_file, 'w', encoding='utf-8') as w:
+            w.write("trace=False\n")
+
+    sqlite3db = SQLiteDatabase(db_file)
+
+    try:
+        if len(argv) > 1 and argv[1] == "add":
+            add.register_command(argv[2:], sqlite3db)
         else:
-            cmdsense(sqlite3db)
+            if len(argv) > 1:
+                print("(Commandsense): Unidentified command.")
+            else:
+                cmdsense(sqlite3db, _retrieve_trace_mode(user_conf_file))
+    finally:
+        sqlite3db.close()
 
 
-def cmdsense(db: SQLiteDatabase) -> None:
+def cmdsense(db: SQLiteDatabase, trace_mode: bool) -> None:
     """
     Main body of program. Is called if the 'add' argument isn't added to program.
 
     Args:
         db (SQLiteDatabase): SQLite3 Database managing command history
+        trace_mode (bool): bool controlling printing of trace details
 
     Returns:
         _: None
     """
 
     commands = list(set(db.load_commands_v1()))
-
-    trace_mode = True
 
     completer = WordCompleter(words=commands, ignore_case=True, match_middle=True)
 
@@ -94,11 +109,14 @@ def is_unknown_command(ret_code: int, stderr: str) -> bool:
     """
     return ret_code == 127 or "not found" in stderr or "not recognized" in stderr
 
+def _retrieve_trace_mode(user_conf_file: Path) -> bool:
+    """ Grab the trace mode from user conf file """
+    line = ""
+    with open(user_conf_file, 'r', encoding='utf-8') as r:
+        line = r.readline()
+    return True if line.split('=')[1].strip() == "True" else False
 
-# Note:
-# when ready for full release, make sure i do something like:
-# function __cmdsense_hook() {
-#     cmdsense add "$(history 1)"
-# },
-# and then plug it into $PROMPT_COMMAND:
-# PROMPT_COMMAND = "$PROMPT_COMMAND; __cmdsense_hook"
+
+# TODO:
+    # Add an ability with a flag or something to change the trace_mode
+    # Add items to the user conf as i think of conf'able items
