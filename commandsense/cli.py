@@ -30,7 +30,7 @@ CLI_ARGS = {
 
 DEFAULT_CONFIG = {
     "trace": "False",
-    "num_kept_records": "1000",
+    "num_kept_records": "100",
     "time_to_keep_records": "14d",
 }
 
@@ -54,7 +54,9 @@ def main():
     user_conf_file = user_conf_dir / "commandsense.conf"
     if not user_conf_file.exists():
         make_config(user_conf_file, DEFAULT_CONFIG)
-    sqlite3db = SQLiteDatabase(db_file)
+
+    user_conf_vars = get_user_conf_vars(user_conf_file)
+    sqlite3db = SQLiteDatabase(db_file, user_conf_vars["trace"])
 
     try:
         if len(argv) > 1:
@@ -68,13 +70,11 @@ def main():
                     "num_kept_records",
                     "time_to_keep_records",
                 ):
-                    edit_config_var(
-                        get_user_conf_vars(user_conf_file), cli_arg, argv[2]
-                    )
+                    edit_config_var(user_conf_file, user_conf_vars, cli_arg, argv[2])
                 else:
                     print("(Commandsense): Unidentified command.")
         else:
-            cmdsense(sqlite3db, get_user_conf_vars(user_conf_file))
+            cmdsense(sqlite3db, user_conf_vars)
     finally:
         sqlite3db.close()
 
@@ -145,7 +145,7 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
             - "num_kept_records" : x (int)
             - "time_to_keep_records" : yt (y: int, t: str [h, d, w, m, y])
     """
-    conf = {k: v for k, v in DEFAULT_CONFIG.items()}
+    conf = dict(DEFAULT_CONFIG)
     changed_a_field = False
 
     try:
@@ -153,7 +153,7 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
             for line in r:
                 line = line.strip().split("=")
                 conf[line[0]] = line[1]
-        print(conf)
+
         # Convert plain strings into intended types and verify inputs are as expected
         trace = str(conf["trace"])
         if trace.lower() not in ("true", "false"):
@@ -180,6 +180,9 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
     except FileNotFoundError:
         make_config(user_conf_file, conf)
 
+    except OSError as e:
+        print(f"\nError in getting user config variables: {e}")
+
     if changed_a_field:
         # A field was modified, update config file
         make_config(user_conf_file, conf)
@@ -195,13 +198,19 @@ def make_config(path: Path, config: dict[str, bool | int | str]) -> None:
     Args:
         path (Path): path where default config should be stored
     """
-    with open(path, "w", encoding="utf-8") as w:
-        for k, v in config.items():
-            w.write(f"{k}={v}\n")
+    try:
+        with open(path, "w", encoding="utf-8") as w:
+            for k, v in config.items():
+                w.write(f"{k}={v}\n")
+    except OSError as e:
+        print(f"Error in making config file: {e}")
 
 
 def edit_config_var(
-    existing_vars: dict[str, bool | int | str], config_to_change: str, to_be_value: str
+    conf_path: Path,
+    existing_vars: dict[str, bool | int | str],
+    config_to_change: str,
+    to_be_value: str,
 ) -> None:
     """
     Edits the value of the passed in configuration variable name.
@@ -231,7 +240,7 @@ def edit_config_var(
             existing_vars[config_to_change] = to_be_value
             made_a_change = True
     if made_a_change:
-        make_config(existing_vars)
+        make_config(conf_path, existing_vars)
 
 
 def is_unknown_command(ret_code: int, stderr: str) -> bool:
@@ -246,4 +255,6 @@ def is_unknown_command(ret_code: int, stderr: str) -> bool:
     Returns:
         _: True if unknown, False otherwise
     """
-    return ret_code in (127, 9009) or "not found" in stderr or "not recognized" in stderr
+    return (
+        ret_code in (127, 9009) or "not found" in stderr or "not recognized" in stderr
+    )

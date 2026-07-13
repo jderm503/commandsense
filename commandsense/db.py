@@ -7,6 +7,7 @@ the commands the user types in normal terminal usage.
 
 from time import time
 from pathlib import Path
+from traceback import format_exc
 import sqlite3
 
 
@@ -16,8 +17,11 @@ class SQLiteDatabase:
     This class is in charge of handing sqlite operations.
     """
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, trace_mode: bool) -> None:
+        # ! there could be a chance we can remove this later. isnt accessed anywhere currently
         self.db_path: Path = db_path
+
+        self.trace_mode = trace_mode
         self.connection: sqlite3.Connection = sqlite3.connect(db_path)
         self.create_table_if_not_present()
 
@@ -47,18 +51,23 @@ class SQLiteDatabase:
             _: None
         """
         date = int(time())
-        self.connection.execute(
-            """
-            INSERT INTO cmdsense_records (command, uses, last_use_date)
-            VALUES (?, 1, ?)
-            ON CONFLICT(command)
-            DO UPDATE SET
-                uses = uses + 1,
-                last_use_date = excluded.last_use_date
-            """,
-            (command, date),
-        )
-        self.connection.commit()
+        try:
+            self.connection.execute(
+                """
+                INSERT INTO cmdsense_records (command, uses, last_use_date)
+                VALUES (?, 1, ?)
+                ON CONFLICT(command)
+                DO UPDATE SET
+                    uses = uses + 1,
+                    last_use_date = excluded.last_use_date
+                """,
+                (command, date),
+            )
+            self.connection.commit()
+        except sqlite3.Error as e:
+            print(f"(Commandsense): Database error: {e}")
+            if self.trace_mode:
+                print(format_exc())
 
     def create_table_if_not_present(self):
         """
@@ -68,14 +77,19 @@ class SQLiteDatabase:
         Returns:
             _: None
         """
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS cmdsense_records (
-                command TEXT PRIMARY KEY,
-                uses INTEGER NOT NULL DEFAULT 1,
-                last_use_date INTEGER
-            )
-            """)
-        self.connection.commit()
+        try:
+            self.connection.execute("""
+                CREATE TABLE IF NOT EXISTS cmdsense_records (
+                    command TEXT PRIMARY KEY,
+                    uses INTEGER NOT NULL DEFAULT 1,
+                    last_use_date INTEGER
+                )
+                """)
+            self.connection.commit()
+        except sqlite3.Error as e:
+            print(f"(Commandsense): Database error: {e}")
+            if self.trace_mode:
+                print(format_exc())
 
     def load_commands_v2(self) -> list[str]:
         """
@@ -86,8 +100,13 @@ class SQLiteDatabase:
             cmds (list[str]): a list of commands from the sqlite3 database.
         """
         cmds: list[str] = []
-        for row in self.connection.execute(
-            "SELECT * FROM cmdsense_records ORDER BY uses DESC"
-        ):
-            cmds.append(row[0])
+        try:
+            for row in self.connection.execute(
+                "SELECT * FROM cmdsense_records ORDER BY uses DESC"
+            ):
+                cmds.append(row[0])
+        except sqlite3.Error as e:
+            print(f"(Commandsense): Database error: {e}")
+            if self.trace_mode:
+                print(format_exc())
         return cmds

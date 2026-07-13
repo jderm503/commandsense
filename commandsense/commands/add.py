@@ -22,8 +22,6 @@ def register_command(command_parts: list[str], db: SQLiteDatabase) -> None:
     command: str = " ".join(command_parts).strip()
     if not command or command.startswith("cmdsense"):
         return
-    with open("hold_cmds", "a", encoding="utf-8") as w:
-        w.write(f"{command}\n")
     db.register_command(command)
 
 
