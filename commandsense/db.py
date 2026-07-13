@@ -47,16 +47,18 @@ class SQLiteDatabase:
             _: None
         """
         date = int(time())
-        self.connection.execute("""
+        self.connection.execute(
+            """
             INSERT INTO cmdsense_records (command, uses, last_use_date)
             VALUES (?, 1, ?)
             ON CONFLICT(command)
             DO UPDATE SET
                 uses = uses + 1,
                 last_use_date = excluded.last_use_date
-            """, (command, date))
+            """,
+            (command, date),
+        )
         self.connection.commit()
-
 
     def create_table_if_not_present(self):
         """
@@ -66,27 +68,26 @@ class SQLiteDatabase:
         Returns:
             _: None
         """
-        self.connection.execute(
-            """
+        self.connection.execute("""
             CREATE TABLE IF NOT EXISTS cmdsense_records (
                 command TEXT PRIMARY KEY,
                 uses INTEGER NOT NULL DEFAULT 1,
                 last_use_date INTEGER
             )
-            """
-        )
+            """)
         self.connection.commit()
 
+    def load_commands_v2(self) -> list[str]:
+        """
+        This function obtains the commands in the tool's sqlite database
+        and returns them as a list.
 
-    def load_commands_v1(self) -> list[str]:
-        """temp function, loading commands from file. will later switch to an sqlite model.
-        when i get to that point, look into this library for storing location:
-        platformdirs: https://pypi.org/project/platformdirs/
-        also note that at that point i wont need a load commands function, since i will direct
-        hook into sqlite. maybe just a helper function for grabbing requested stuff. will need a
-        function for computing frequencies too"""
+        Returns:
+            cmds (list[str]): a list of commands from the sqlite3 database.
+        """
         cmds: list[str] = []
-        with open("hold_cmds", "r", encoding="utf-8") as r:
-            for line in r:
-                cmds.append(line.strip())
+        for row in self.connection.execute(
+            "SELECT * FROM cmdsense_records ORDER BY uses DESC"
+        ):
+            cmds.append(row[0])
         return cmds
