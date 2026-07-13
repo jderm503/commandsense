@@ -34,6 +34,8 @@ DEFAULT_CONFIG = {
     "time_to_keep_records": "14d",
 }
 
+VALID_TIME_UNITS = {"h", "d", "w", "m", "y"}
+
 
 def main():
     """
@@ -66,7 +68,9 @@ def main():
                     "num_kept_records",
                     "time_to_keep_records",
                 ):
-                    edit_config_var(cli_arg)
+                    edit_config_var(
+                        get_user_conf_vars(user_conf_file), cli_arg, argv[2]
+                    )
                 else:
                     print("(Commandsense): Unidentified command.")
         else:
@@ -141,9 +145,9 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
             - "num_kept_records" : x (int)
             - "time_to_keep_records" : yt (y: int, t: str [h, d, w, m, y])
     """
-    conf = {"trace": False, "num_kept_records": 1000, "time_to_keep_records": "14d"}
-    valid_time_units = {"h", "d", "w", "m", "y"}
+    conf = {k: v for k, v in DEFAULT_CONFIG.items()}
     changed_a_field = False
+
     try:
         with open(user_conf_file, "r", encoding="utf-8") as r:
             for line in r:
@@ -153,7 +157,7 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
         # Convert plain strings into intended types and verify inputs are as expected
         trace = str(conf["trace"])
         if trace.lower() not in ("true", "false"):
-            conf["trace"] = "False"
+            conf["trace"] = DEFAULT_CONFIG["trace"]
             changed_a_field = True
         conf["trace"] = trace.lower() == "true"
 
@@ -161,16 +165,16 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
             conf["num_kept_records"] = int(conf["num_kept_records"])
         except ValueError:
             # Convert to default conf
-            conf["num_kept_records"] = 1000
+            conf["num_kept_records"] = DEFAULT_CONFIG["num_kept_records"]
             changed_a_field = True
 
         time_keep_records = conf["time_to_keep_records"]
         if not (
             len(time_keep_records) > 1
             and time_keep_records[:-1].isdigit()
-            and time_keep_records[-1] in valid_time_units
+            and time_keep_records[-1] in VALID_TIME_UNITS
         ):
-            conf["time_to_keep_records"] = "14d"
+            conf["time_to_keep_records"] = DEFAULT_CONFIG["time_to_keep_records"]
             changed_a_field = True
 
     except FileNotFoundError:
@@ -196,14 +200,38 @@ def make_config(path: Path, config: dict[str, bool | int | str]) -> None:
             w.write(f"{k}={v}\n")
 
 
-def edit_config_var(config_to_change: str) -> None:
+def edit_config_var(
+    existing_vars: dict[str, bool | int | str], config_to_change: str, to_be_value: str
+) -> None:
     """
     Edits the value of the passed in configuration variable name.
 
     Args:
+        existing_vars (dict[str, bool | int | str]): current user config variables
         config_to_change (str): Name of config variable to change.
+        to_be_value (str): Value which will replace existing config value
     """
-    # ? pick back up here later
+    made_a_change = False
+    if config_to_change == "trace":
+        existing_vars[config_to_change] = to_be_value.lower() == "true"
+        made_a_change = True
+    elif config_to_change == "num_kept_records":
+        try:
+            existing_vars[config_to_change] = int(to_be_value)
+            made_a_change = True
+        except ValueError:
+            # Leave config as is
+            pass
+    elif config_to_change == "time_to_keep_records":
+        if (
+            len(to_be_value) > 1
+            and to_be_value[:-1].isdigit()
+            and to_be_value[-1] in VALID_TIME_UNITS
+        ):
+            existing_vars[config_to_change] = to_be_value
+            made_a_change = True
+    if made_a_change:
+        make_config(existing_vars)
 
 
 def is_unknown_command(ret_code: int, stderr: str) -> bool:
@@ -218,12 +246,4 @@ def is_unknown_command(ret_code: int, stderr: str) -> bool:
     Returns:
         _: True if unknown, False otherwise
     """
-    return ret_code == 127 or "not found" in stderr or "not recognized" in stderr
-
-
-def _retrieve_trace_mode(user_conf_file: Path) -> bool:
-    """Grab the trace mode from user conf file"""
-    line = ""
-    with open(user_conf_file, "r", encoding="utf-8") as r:
-        line = r.readline()
-    return line.split("=")[1].strip() == "True"
+    return ret_code in (127, 9009) or "not found" in stderr or "not recognized" in stderr
