@@ -61,18 +61,20 @@ def main():
     try:
         if len(argv) > 1:
             cli_arg = CLI_ARGS.get(argv[1].strip().lower(), "")
-            added_flag_identifier = cli_arg
-            if added_flag_identifier == "add":
-                add.register_command(argv[2:], sqlite3db)
-            else:
-                if cli_arg in (
-                    "trace_mode",
-                    "num_kept_records",
-                    "time_to_keep_records",
-                ):
-                    edit_config_var(user_conf_file, user_conf_vars, cli_arg, argv[2])
+            if len(argv) >= 3:
+                if cli_arg == "add":
+                    add.register_command(argv[2:], sqlite3db)
                 else:
-                    print("(Commandsense): Unidentified command.")
+                    if cli_arg in (
+                        "trace_mode",
+                        "num_kept_records",
+                        "time_to_keep_records",
+                    ):
+                        edit_config_var(user_conf_file, user_conf_vars, cli_arg, argv[2])
+                    else:
+                        print("(Commandsense): Unidentified command.")
+            else:
+                print("(Commandsense): Unidentified command or empty inputs supplied")
         else:
             cmdsense(sqlite3db, user_conf_vars)
     finally:
@@ -165,7 +167,7 @@ def get_user_conf_vars(user_conf_file: Path) -> dict[str, bool | int | str]:
             conf["num_kept_records"] = int(conf["num_kept_records"])
         except ValueError:
             # Convert to default conf
-            conf["num_kept_records"] = DEFAULT_CONFIG["num_kept_records"]
+            conf["num_kept_records"] = int(DEFAULT_CONFIG["num_kept_records"])
             changed_a_field = True
 
         time_keep_records = conf["time_to_keep_records"]
@@ -221,10 +223,10 @@ def edit_config_var(
         to_be_value (str): Value which will replace existing config value
     """
     made_a_change = False
-    if config_to_change == "trace":
-        existing_vars[config_to_change] = to_be_value.lower() == "true"
+    if config_to_change == "trace_mode":
+        existing_vars["trace"] = to_be_value.lower() == "true"
         made_a_change = True
-    elif config_to_change == "num_kept_records":
+    elif config_to_change == "num_kept_records": 
         try:
             existing_vars[config_to_change] = int(to_be_value)
             made_a_change = True
